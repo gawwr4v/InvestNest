@@ -22,8 +22,15 @@ InvestNest is a Kotlin + Jetpack Compose Android app for exploring mutual funds,
 - System light and dark theme support with a green blue visual identity
 
 ## Preview
+### Wireframe (Provided Design)
+This app was built based on a provided wireframe.  
+The implementation follows a somewhat similar mapping of the given design into Jetpack Compose UI.
 
+<p align="left">
+  <img src="assets/wireframe.png" width="400"/>
+</p>
 
+### Screen Recording
 https://github.com/user-attachments/assets/9706567d-6482-425b-8186-5c2cfa5ea7b4
 
 
