@@ -2,6 +2,13 @@
 
 InvestNest is a Kotlin + Jetpack Compose Android app for exploring mutual funds, reviewing NAV (Net Asset Value) history, and saving funds into custom watchlists.
 
+[![Android](https://img.shields.io/badge/Platform-Android-brightgreen.svg)](https://developer.android.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-7F52FF.svg)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-4285F4.svg)](https://developer.android.com/jetpack/compose)
+[![MVVM](https://img.shields.io/badge/MVVM-FF6F00.svg)](https://developer.android.com/topic/architecture)
+[![Retrofit](https://img.shields.io/badge/Retrofit-009688.svg)](https://square.github.io/retrofit/)
+[![Hilt](https://img.shields.io/badge/Hilt-0F9D58.svg)](https://developer.android.com/training/dependency-injection/hilt-android)
+[![Room](https://img.shields.io/badge/Room-6A1B9A.svg)](https://developer.android.com/training/data-storage/room)
 ## What the app includes
 
 - Explore screen with four required categories, `Index Funds`, `Bluechip Funds`, `Tax Saver (ELSS)`, and `Large Cap Funds`
@@ -48,7 +55,8 @@ The app keeps the structure feature first, while the data layer stays shared and
 
 ## System architecture
 
-![img.png](assets/DataFlowDiagram.png)
+High-level data flow of the application:
+![Data Flow Diagram](assets/DataFlowDiagram.png)
 
 ### Data flow
 
