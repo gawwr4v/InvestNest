@@ -1,6 +1,6 @@
 # InvestNest
 
-InvestNest is a Kotlin + Jetpack Compose Android app for exploring mutual funds, reviewing NAV history, and saving funds into custom watchlists.
+InvestNest is a Kotlin + Jetpack Compose Android app for exploring mutual funds, reviewing NAV (Net Asset Value) history, and saving funds into custom watchlists.
 
 ## What the app includes
 
@@ -14,17 +14,16 @@ InvestNest is a Kotlin + Jetpack Compose Android app for exploring mutual funds,
 - Explicit loading, error, and empty states across the main flows
 - System light and dark theme support with a green blue visual identity
 
-## Screenshots
+## Preview
 
-<p align="center">
-  <video width="300" controls>
-    <source src="assets/darkModeDemo.mp4" type="video/mp4">
-  </video>
 
-  <video width="300" controls>
-    <source src="assets/lightModeDemo.mp4" type="video/mp4">
-  </video>
-</p>
+https://github.com/user-attachments/assets/9706567d-6482-425b-8186-5c2cfa5ea7b4
+
+
+
+https://github.com/user-attachments/assets/50f704ee-959b-490a-abfc-a0bbe1ecee99
+
+
 
 ## Tech stack
 
@@ -51,9 +50,9 @@ The app keeps the structure feature first, while the data layer stays shared and
 
 ![img.png](assets/DataFlowDiagram.png)
 
-## Data flow
+### Data flow
 
-### Explore
+#### Explore
 
 1. Read cached explore cards from Room, if available
 2. Fetch search results for each category keyword
@@ -62,21 +61,21 @@ The app keeps the structure feature first, while the data layer stays shared and
 5. Update cards progressively as data returns
 6. Save the enriched section back into Room
 
-### Search
+#### Search
 
 1. Debounce the query by `300ms`
 2. Fetch matching schemes from MFAPI search
 3. Show immediate results
 4. Fill in latest NAV and category details progressively
 
-### Watchlists
+#### Watchlists
 
 1. Store folders in Room
 2. Store saved funds separately
 3. Use a cross reference table so a single fund can belong to multiple folders
 4. Save bottom sheet changes in one Room transaction
 
-### Fund chart
+#### Fund chart
 
 - Full history comes from `https://api.mfapi.in/mf/{scheme_code}`
 - History is sorted oldest to newest
@@ -118,4 +117,4 @@ The app keeps the structure feature first, while the data layer stays shared and
 
 ## Known build note
 
-The current Android Gradle Plugin setup needed compatibility flags in `gradle.properties` so Kotlin Android, Hilt, and kapt can work together cleanly with this template. The app compiles successfully with that setup, but AGP warns that those flags are deprecated and should be revisited on a future Gradle migration pass.
+The current Android Gradle Plugin setup needed compatibility flags in `gradle.properties` so Kotlin Android, Hilt, and kapt can work together cleanly with this template. The app compiles successfully with that setup.
