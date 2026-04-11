@@ -64,7 +64,7 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             queryFlow
                 .map { it.trim() }
-                // Debounce keeps the search screen responsive without spamming the API.
+                // this debounce pipeline is crucial. 300ms delay means we wait till the user stops typing to ping the backend.
                 .debounce(300)
                 .distinctUntilChanged()
                 .collectLatest { query ->

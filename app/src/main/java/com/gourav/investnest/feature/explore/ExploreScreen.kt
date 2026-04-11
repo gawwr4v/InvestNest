@@ -57,6 +57,7 @@ class ExploreViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
+            // immediate read from room to show cached cards without network delay
             val cachedSections = repository.getCachedExploreSections()
             _uiState.value = if (cachedSections.isNotEmpty()) {
                 ExploreUiState(
@@ -69,6 +70,7 @@ class ExploreViewModel @Inject constructor(
             }
 
             var sawFreshData = false
+            // progressive enrichment starts here. we fire search to get basic seeds instantly.
             ExploreCategory.entries.forEach { category ->
                 val seeds = runCatching {
                     repository.getExploreSeeds(category)
@@ -91,6 +93,7 @@ class ExploreViewModel @Inject constructor(
                 }
 
                 val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
+                // supervisor scope prevents a single failed network call from crashing the other coroutines in parallel
                 supervisorScope {
                     seeds.forEach { seed ->
                         launch {

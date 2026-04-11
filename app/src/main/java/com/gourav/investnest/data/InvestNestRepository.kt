@@ -35,6 +35,7 @@ class InvestNestRepository @Inject constructor(
 ) {
     private val apiFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy")
 
+    // reads from room dao and maps entities to ui summaries. flow means any db change instantly pushes to the ui
     fun observeWatchlists(): Flow<List<WatchlistSummary>> {
         return watchlistDao.observeWatchlistsWithFunds().map { watchlists ->
             watchlists.map { it.toSummary() }
@@ -49,6 +50,7 @@ class InvestNestRepository @Inject constructor(
         return watchlistDao.observeWatchlistIdsForFund(schemeCode).map { it.toSet() }
     }
 
+    // this reads the room cache mapped by category. groupby helps reconstruct the sections for offline explore
     suspend fun getCachedExploreSections(): List<ExploreSection> {
         return exploreCacheDao.getAll()
             .groupBy { it.categoryKey }
@@ -101,6 +103,7 @@ class InvestNestRepository @Inject constructor(
         funds: List<FundSummary>,
     ) {
         val now = System.currentTimeMillis()
+        // converting remote summary into room entity and replacing old category data wholesale
         val cacheEntries = funds.mapIndexed { index, fund ->
             ExploreCacheEntity(
                 categoryKey = category.key,
@@ -126,6 +129,8 @@ class InvestNestRepository @Inject constructor(
         selectedWatchlistIds: Set<Long>,
         newWatchlistName: String,
     ) {
+        // this is critical. we wrap folder creation, upserting the fund, deleting old links, and inserting new links inside a transaction.
+        // if anything fails midway, it rolls back cleanly so we dont get corrupted state.
         database.withTransaction {
             // One transaction keeps folder creation and membership updates aligned.
             val finalIds = selectedWatchlistIds.toMutableSet()
@@ -160,6 +165,7 @@ class InvestNestRepository @Inject constructor(
         navPoints: List<NavPoint>,
         maxPoints: Int = 120,
     ): List<NavPoint> {
+        // taking all dates and stepping through them to get approx 120 points. keeps the canvas fast without choking the ui thread.
         // Keep chart rendering light by capping the dataset before it reaches UI.
         if (navPoints.size <= maxPoints) {
             return navPoints

@@ -43,6 +43,7 @@ data class SavedFundEntity(
     primaryKeys = ["watchlistId", "schemeCode"],
     indices = [Index("schemeCode")],
 )
+// this is our junction table for the many-to-many relationship. the index on schemeCode makes the observeWatchlistIdsForFund query super fast.
 data class WatchlistFundCrossRef(
     val watchlistId: Long,
     val schemeCode: Int,

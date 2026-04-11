@@ -218,6 +218,7 @@ class FundDetailViewModel @Inject constructor(
 
     private fun FundDetail.pointsFor(range: NavRange): List<NavPoint> {
         val latestDate = navHistory.lastOrNull()?.date ?: return emptyList()
+        // simple date subtraction using minusMonths/minusYears to filter the historical nav
         val filtered = when (range) {
             NavRange.SIX_MONTHS -> navHistory.filter { it.date >= latestDate.minusMonths(6) }
             NavRange.ONE_YEAR -> navHistory.filter { it.date >= latestDate.minusYears(1) }
@@ -521,6 +522,7 @@ private fun NavChart(
     val chartLineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
 
+    // native canvas is way faster than pulling in a massive chart library just to draw a single line path
     Canvas(
         modifier = modifier
             .fillMaxWidth()

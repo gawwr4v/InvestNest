@@ -109,7 +109,7 @@ class CategoryViewModel @Inject constructor(
 
     fun loadMore() {
         _uiState.update { state ->
-            // View All uses one fetch, then reveals more rows locally as the user scrolls.
+            // view all uses a local reveal strategy. we bump visibleCount by 10 to simulate pagination since the api doesnt support it natively.
             if (state.visibleCount >= state.funds.size) state else state.copy(
                 visibleCount = minOf(state.visibleCount + 10, state.funds.size),
             )
@@ -145,6 +145,7 @@ fun CategoryScreen(
     val listState = rememberLazyListState()
     val visibleFunds = uiState.funds.take(uiState.visibleCount)
 
+    // snapshotflow watches the lazy list state. when we scroll within 2 items of the visible end, we fire loadmore
     LaunchedEffect(visibleFunds.size, uiState.funds.size, listState) {
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
