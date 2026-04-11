@@ -1,13 +1,38 @@
 *.iml
 .DS_Store
 Thumbs.db
+
 .gradle/
 .gradle-user/
+.gradle-cache/
+
 .idea/
 .kotlin/
+
 .externalNativeBuild/
 .cxx/
+
 build/
 app/build/
+out/
+
 captures/
+
 local.properties
+
+# Logs & temp
+*.log
+*.tmp
+*.swp
+
+# Signing keys
+*.keystore
+*.jks
+keystore.properties
+
+# Android Studio
+.navigation/
+renderscript/
+
+# Test outputs
+test-results/
