@@ -1,0 +1,92 @@
+package com.gourav.investnest.ui.components
+
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.dp
+import com.gourav.investnest.model.NavPoint
+
+// native canvas is way faster than pulling in a massive chart library just to draw a single line path
+@Composable
+fun NavChart(
+    points: List<NavPoint>,
+    modifier: Modifier = Modifier,
+) {
+    if (points.size < 2) {
+        Card(
+            modifier = modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+        ) {
+            Text(
+                text = "Not enough NAV history yet.",
+                modifier = Modifier.padding(20.dp),
+            )
+        }
+        return
+    }
+
+    val minValue = points.minOf { it.nav }
+    val maxValue = points.maxOf { it.nav }
+    val range = (maxValue - minValue).takeIf { it > 0f } ?: 1f
+    val chartBackground = MaterialTheme.colorScheme.surfaceVariant
+    val chartLineColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+
+    Canvas(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(
+                color = chartBackground,
+                shape = RoundedCornerShape(20.dp),
+            )
+            .padding(16.dp),
+    ) {
+        val rowCount = 4
+        repeat(rowCount) { index ->
+            val y = size.height / rowCount * index
+            drawLine(
+                color = gridColor,
+                start = Offset(0f, y),
+                end = Offset(size.width, y),
+                strokeWidth = 2f,
+            )
+        }
+
+        val path = Path()
+        points.forEachIndexed { index, point ->
+            val x = if (points.size == 1) {
+                size.width / 2f
+            } else {
+                size.width * index / (points.size - 1).toFloat()
+            }
+            val normalized = (point.nav - minValue) / range
+            val y = size.height - (normalized * size.height)
+            if (index == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+        drawPath(
+            path = path,
+            color = chartLineColor,
+            style = Stroke(
+                width = 8f,
+                cap = StrokeCap.Round,
+            ),
+        )
+    }
+}

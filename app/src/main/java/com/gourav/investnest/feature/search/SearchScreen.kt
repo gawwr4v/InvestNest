@@ -14,11 +14,14 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -62,9 +65,11 @@ class SearchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // reactive search pipeline: raw keystrokes → trim → debounce → distinct → search.
+            // debounce(300) waits 300ms after the user stops typing before hitting the API.
+            // collectLatest auto-cancels any in-flight search if a newer query arrives.
             queryFlow
                 .map { it.trim() }
-                // this debounce pipeline is crucial. 300ms delay means we wait till the user stops typing to ping the backend.
                 .debounce(300)
                 .distinctUntilChanged()
                 .collectLatest { query ->
@@ -91,6 +96,8 @@ class SearchViewModel @Inject constructor(
                         isLoading = false,
                     )
                     val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
+                    // same progressive enrichment pattern as Explore.
+                    // supervisorScope ensures one failed /latest call doesn't cancel the rest.
                     supervisorScope {
                         seeds.forEach { seed ->
                             launch {
@@ -182,15 +189,45 @@ fun SearchScreen(
                 }
 
                 uiState.errorMessage != null -> {
-                    item { Text(uiState.errorMessage) }
+                    item {
+                        Text(
+                            text = uiState.errorMessage,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 uiState.query.isBlank() -> {
-                    item { Text("Start typing to search across mutual funds.") }
+                    item {
+                        Text(
+                            text = "Start typing to search across mutual funds.",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 uiState.results.isEmpty() -> {
-                    item { Text("No funds matched your search.") }
+                    item {
+                        Text(
+                            text = "No funds matched your search.",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 32.dp),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
 
                 else -> {
