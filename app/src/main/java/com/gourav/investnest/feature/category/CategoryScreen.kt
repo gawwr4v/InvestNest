@@ -1,7 +1,10 @@
 package com.gourav.investnest.feature.category
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -20,7 +23,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -67,6 +73,8 @@ class CategoryViewModel @Inject constructor(
     fun loadCategory() {
         viewModelScope.launch {
             _uiState.value = CategoryUiState(title = category.title, isLoading = true)
+            // one heavy fetch up front. MFAPI has no pagination, so we grab everything at once
+            // and reveal items locally via visibleCount.
             val seeds = runCatching {
                 repository.searchFundSeeds(category.query, 28)
             }.getOrElse {
@@ -108,8 +116,9 @@ class CategoryViewModel @Inject constructor(
     }
 
     fun loadMore() {
+        // local reveal strategy: we already have all items from the one fetch above.
+        // bumping visibleCount by 10 simulates infinite scroll without real pagination.
         _uiState.update { state ->
-            // view all uses a local reveal strategy. we bump visibleCount by 10 to simulate pagination since the api doesnt support it natively.
             if (state.visibleCount >= state.funds.size) state else state.copy(
                 visibleCount = minOf(state.visibleCount + 10, state.funds.size),
             )
@@ -145,7 +154,8 @@ fun CategoryScreen(
     val listState = rememberLazyListState()
     val visibleFunds = uiState.funds.take(uiState.visibleCount)
 
-    // snapshotflow watches the lazy list state. when we scroll within 2 items of the visible end, we fire loadmore
+    // snapshotFlow watches the LazyListState. when we scroll within 2 items of the
+    // visible end, we trigger loadMore to reveal the next batch of items.
     LaunchedEffect(visibleFunds.size, uiState.funds.size, listState) {
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -171,45 +181,66 @@ fun CategoryScreen(
             )
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading -> {
-                CircularProgressIndicator(modifier = Modifier.padding(innerPadding))
-            }
-
-            uiState.errorMessage != null -> {
-                androidx.compose.material3.TextButton(
-                    onClick = onRetry,
-                    modifier = Modifier.padding(innerPadding),
-                ) {
-                    Text("${uiState.errorMessage} Try Again")
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                uiState.isLoading -> {
+                    CircularProgressIndicator()
                 }
-            }
 
-            visibleFunds.isEmpty() -> {
-                Text(
-                    text = "No funds found in this category.",
-                    modifier = Modifier.padding(innerPadding),
-                )
-            }
-
-            else -> {
-                LazyColumn(
-                    state = listState,
-                    contentPadding = PaddingValues(20.dp),
-                    modifier = Modifier.padding(innerPadding),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    itemsIndexed(visibleFunds, key = { _, fund -> fund.schemeCode }) { index, fund ->
-                        FundListItem(
-                            fund = fund,
-                            onClick = { onFundClick(fund.schemeCode) },
+                uiState.errorMessage != null -> {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = uiState.errorMessage,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp),
                         )
-                        if (index == visibleFunds.lastIndex && visibleFunds.size < uiState.funds.size) {
+                        androidx.compose.material3.TextButton(onClick = onRetry) {
                             Text(
-                                text = "Loading more...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = "Try Again",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold,
                             )
+                        }
+                    }
+                }
+
+                visibleFunds.isEmpty() -> {
+                    Text(
+                        text = "No funds found in this category.",
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        state = listState,
+                        contentPadding = PaddingValues(20.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        itemsIndexed(visibleFunds, key = { _, fund -> fund.schemeCode }) { index, fund ->
+                            FundListItem(
+                                fund = fund,
+                                onClick = { onFundClick(fund.schemeCode) },
+                            )
+                            if (index == visibleFunds.lastIndex && visibleFunds.size < uiState.funds.size) {
+                                Text(
+                                    text = "Loading more...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                     }
                 }

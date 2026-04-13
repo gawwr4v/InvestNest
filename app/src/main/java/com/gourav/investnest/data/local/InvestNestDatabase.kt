@@ -18,6 +18,7 @@ import com.gourav.investnest.model.WatchlistDetail
 import com.gourav.investnest.model.WatchlistSummary
 import kotlinx.coroutines.flow.Flow
 
+// folder metadata for user-created watchlists (e.g. "Retirement", "Tax Savers")
 @Entity(tableName = "watchlists")
 data class WatchlistEntity(
     @PrimaryKey(autoGenerate = true)
@@ -26,6 +27,8 @@ data class WatchlistEntity(
     val createdAtEpochMillis: Long,
 )
 
+// stores enough fund info to render watchlist screens without a network call.
+// full chart history is NOT stored here — it's too large and not needed for the overview.
 @Entity(tableName = "saved_funds")
 data class SavedFundEntity(
     @androidx.room.PrimaryKey
@@ -38,18 +41,23 @@ data class SavedFundEntity(
     val schemeType: String,
 )
 
+// junction table for the many-to-many relationship between watchlists and funds.
+// composite PK prevents duplicate entries. the index on schemeCode speeds up
+// "which watchlists contain this fund?" queries on the detail screen.
 @Entity(
     tableName = "watchlist_fund_cross_refs",
     primaryKeys = ["watchlistId", "schemeCode"],
     indices = [Index("schemeCode")],
 )
-// this is our junction table for the many-to-many relationship. the index on schemeCode makes the observeWatchlistIdsForFund query super fast.
 data class WatchlistFundCrossRef(
     val watchlistId: Long,
     val schemeCode: Int,
     val addedAtEpochMillis: Long,
 )
 
+// persists enriched Explore cards for offline support.
+// composite PK (categoryKey + schemeCode) ensures each fund appears once per category.
+// position field preserves the original display order from the API.
 @Entity(
     tableName = "explore_cache",
     primaryKeys = ["categoryKey", "schemeCode"],
@@ -67,6 +75,8 @@ data class ExploreCacheEntity(
     val cachedAtEpochMillis: Long,
 )
 
+// Room's @Relation with @Junction resolves the many-to-many join automatically.
+// @Transaction ensures the watchlist + its funds are read as one consistent snapshot.
 data class WatchlistWithFunds(
     @Embedded
     val watchlist: WatchlistEntity,
@@ -98,12 +108,15 @@ interface WatchlistDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWatchlist(entity: WatchlistEntity): Long
 
+    // case-insensitive name check prevents creating duplicate watchlists
     @Query("SELECT * FROM watchlists WHERE LOWER(name) = LOWER(:name) LIMIT 1")
     suspend fun getWatchlistByName(name: String): WatchlistEntity?
 
+    // REPLACE strategy means re-saving a fund updates its NAV without creating duplicates
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSavedFund(entity: SavedFundEntity)
 
+    // wipe-and-reinsert strategy: simpler and more reliable than calculating diffs
     @Query("DELETE FROM watchlist_fund_cross_refs WHERE schemeCode = :schemeCode")
     suspend fun deleteFundMemberships(schemeCode: Int)
 
@@ -137,6 +150,8 @@ abstract class InvestNestDatabase : RoomDatabase() {
     abstract fun watchlistDao(): WatchlistDao
     abstract fun exploreCacheDao(): ExploreCacheDao
 }
+// extension mappers keep entity-to-domain conversion close to the data layer.
+// ViewModels never see Room entities directly — they only work with clean domain models.
 
 fun WatchlistWithFunds.toSummary(): WatchlistSummary {
     return WatchlistSummary(
