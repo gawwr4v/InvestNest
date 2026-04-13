@@ -5,6 +5,8 @@ import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
 
+// these are the data transfer objects for mfapi.in
+// i use @SerializedName because the api uses underscores but i want camelCase in kotlin
 data class SearchFundDto(
     @SerializedName("schemeCode")
     val schemeCode: Int,
@@ -41,17 +43,20 @@ data class FundResponseDto(
     val status: String,
 )
 
+// retrofit interface for hitting the mfapi endpoints
 interface MfApiService {
     @GET("mf/search")
     suspend fun searchFunds(
         @Query("q") query: String,
     ): List<SearchFundDto>
 
+    // i use the /latest endpoint when i just need the current price and no history
     @GET("mf/{schemeCode}/latest")
     suspend fun getLatestFund(
         @Path("schemeCode") schemeCode: Int,
     ): FundResponseDto
 
+    // this returns the full historical nav data for the chart
     @GET("mf/{schemeCode}")
     suspend fun getFundHistory(
         @Path("schemeCode") schemeCode: Int,

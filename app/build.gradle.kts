@@ -62,13 +62,17 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
+    // local database for caching explore data and watchlists
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
     implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
+    // dependency injection for managing instances of repositories and viewmodels
     implementation(libs.hilt.android)
     kapt(libs.hilt.compiler)
+    // networking library to fetch data from mfapi.in
     implementation(libs.retrofit)
+    // gson handles automatically converting api json into kotlin data classes
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp.logging)
     implementation(libs.gson)
