@@ -211,7 +211,7 @@ fun FundDetailScreen(
                                 DetailInfoCard(
                                     title = "Type",
                                     value = detail.schemeType,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(0.9f),
                                 )
                                 DetailInfoCard(
                                     title = "AMC",
@@ -221,7 +221,7 @@ fun FundDetailScreen(
                                 DetailInfoCard(
                                     title = "Updated",
                                     value = detail.latestNavDate,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1.1f),
                                 )
                             }
                         }

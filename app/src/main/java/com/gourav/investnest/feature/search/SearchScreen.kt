@@ -65,9 +65,8 @@ class SearchViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // reactive search pipeline: raw keystrokes → trim → debounce → distinct → search.
-            // debounce(300) waits 300ms after the user stops typing before hitting the API.
-            // collectLatest auto-cancels any in-flight search if a newer query arrives.
+            // search pipeline: whitespace trimming, 300ms debounce to prevent excessive API requests,
+            // and collectLatest to cancel stale searches when the query changes.
             queryFlow
                 .map { it.trim() }
                 .debounce(300)
@@ -82,6 +81,7 @@ class SearchViewModel @Inject constructor(
                         isLoading = true,
                     )
                     val seeds = runCatching {
+                        // NOTE: MFAPI.in free tier limits search results to 15 items.
                         repository.searchFundSeeds(query, 20)
                     }.getOrElse {
                         _uiState.value = SearchUiState(
@@ -90,14 +90,15 @@ class SearchViewModel @Inject constructor(
                         )
                         return@collectLatest
                     }
-                    _uiState.value = SearchUiState(
-                        query = query,
-                        results = seeds,
-                        isLoading = false,
-                    )
+                    _uiState.update { state ->
+                        state.copy(
+                            query = query,
+                            results = seeds,
+                            isLoading = false,
+                        )
+                    }
                     val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
-                    // same progressive enrichment pattern as Explore.
-                    // supervisorScope ensures one failed /latest call doesn't cancel the rest.
+                    // same enrichment as explore, we backfill nav data in parallel
                     supervisorScope {
                         seeds.forEach { seed ->
                             launch {
@@ -231,6 +232,7 @@ fun SearchScreen(
                 }
 
                 else -> {
+                    // keys are important here so compose knows exactly which item changed
                     items(uiState.results, key = { it.schemeCode }) { fund ->
                         FundListItem(
                             fund = fund,

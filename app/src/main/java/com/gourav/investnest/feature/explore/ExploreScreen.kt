@@ -62,7 +62,7 @@ class ExploreViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            // immediate read from room to show cached cards without network delay
+            // reading from room first so data is visible instantly without waiting for the network
             val cachedSections = repository.getCachedExploreSections()
             _uiState.value = if (cachedSections.isNotEmpty()) {
                 ExploreUiState(
@@ -75,7 +75,7 @@ class ExploreViewModel @Inject constructor(
             }
 
             var sawFreshData = false
-            // progressive enrichment starts here. we fire search to get basic seeds instantly.
+            // progressive enrichment thingy... first we fetch names/codes (seeds)
             ExploreCategory.entries.forEach { category ->
                 val seeds = runCatching {
                     repository.getExploreSeeds(category)
@@ -83,7 +83,6 @@ class ExploreViewModel @Inject constructor(
                     return@forEach
                 }
                 sawFreshData = true
-                // Seed the section fast, then patch richer metadata as detail calls return.
                 _uiState.update { state ->
                     state.withSection(
                         ExploreSection(
@@ -98,10 +97,11 @@ class ExploreViewModel @Inject constructor(
                 }
 
                 val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
-                // supervisor scope prevents a single failed network call from crashing the other coroutines in parallel
+                // supervisor scope is the real deal, it prevents one failed network call from killing the whole screen refresh
                 supervisorScope {
                     seeds.forEach { seed ->
                         launch {
+                            // fetch the full details (nav, etc) for each fund in parallel
                             val summary = runCatching {
                                 repository.getFundSummary(seed.schemeCode)
                             }.getOrNull() ?: return@launch
@@ -127,6 +127,7 @@ class ExploreViewModel @Inject constructor(
                     }
                 }
 
+                // finalize the section and save it to room so it's there next time we open the app offline
                 val finalSection = synchronized(currentFunds) {
                     seeds.map { currentFunds[it.schemeCode] ?: it }
                         .filterNot { it.isMetadataLoading }
@@ -149,6 +150,7 @@ class ExploreViewModel @Inject constructor(
     }
 
     private fun ExploreUiState.withSection(section: ExploreSection): ExploreUiState {
+        // simple helper to swap out one category's list without messing up the others
         val updatedSections = sections
             .filterNot { it.category == section.category }
             .plus(section)

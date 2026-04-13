@@ -18,7 +18,7 @@ import com.gourav.investnest.model.WatchlistDetail
 import com.gourav.investnest.model.WatchlistSummary
 import kotlinx.coroutines.flow.Flow
 
-// folder metadata for user-created watchlists (e.g. "Retirement", "Tax Savers")
+// this stores the name and info for folders like "Tax Savers" or "SIP Funds"
 @Entity(tableName = "watchlists")
 data class WatchlistEntity(
     @PrimaryKey(autoGenerate = true)
@@ -27,8 +27,8 @@ data class WatchlistEntity(
     val createdAtEpochMillis: Long,
 )
 
-// stores enough fund info to render watchlist screens without a network call.
-// full chart history is NOT stored here — it's too large and not needed for the overview.
+// storage for basic metadata... enough for a card. 
+// chart data is way too big to keep for every fund u save.
 @Entity(tableName = "saved_funds")
 data class SavedFundEntity(
     @androidx.room.PrimaryKey
@@ -41,9 +41,8 @@ data class SavedFundEntity(
     val schemeType: String,
 )
 
-// junction table for the many-to-many relationship between watchlists and funds.
-// composite PK prevents duplicate entries. the index on schemeCode speeds up
-// "which watchlists contain this fund?" queries on the detail screen.
+// this is the junction table for our many-to-many relationship
+// index on schemeCode allows finding which watchlists a fund belongs to quickly
 @Entity(
     tableName = "watchlist_fund_cross_refs",
     primaryKeys = ["watchlistId", "schemeCode"],
@@ -55,9 +54,8 @@ data class WatchlistFundCrossRef(
     val addedAtEpochMillis: Long,
 )
 
-// persists enriched Explore cards for offline support.
-// composite PK (categoryKey + schemeCode) ensures each fund appears once per category.
-// position field preserves the original display order from the API.
+// this persists the enriched cards u see on explore so it works offline
+// position field used to keep the same order the api gave us
 @Entity(
     tableName = "explore_cache",
     primaryKeys = ["categoryKey", "schemeCode"],
@@ -75,8 +73,8 @@ data class ExploreCacheEntity(
     val cachedAtEpochMillis: Long,
 )
 
-// Room's @Relation with @Junction resolves the many-to-many join automatically.
-// @Transaction ensures the watchlist + its funds are read as one consistent snapshot.
+// @Relation and @Junction tell Room how to join these tables automatically
+// @Transaction makes sure we read everything in one consistent snapshot
 data class WatchlistWithFunds(
     @Embedded
     val watchlist: WatchlistEntity,
@@ -108,15 +106,15 @@ interface WatchlistDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertWatchlist(entity: WatchlistEntity): Long
 
-    // case-insensitive name check prevents creating duplicate watchlists
+    // check for duplicate names ignoring case... prevents "HDFC" and "hdfc" being separate folders
     @Query("SELECT * FROM watchlists WHERE LOWER(name) = LOWER(:name) LIMIT 1")
     suspend fun getWatchlistByName(name: String): WatchlistEntity?
 
-    // REPLACE strategy means re-saving a fund updates its NAV without creating duplicates
+    // REPLACE updates the NAV data without making new items
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertSavedFund(entity: SavedFundEntity)
 
-    // wipe-and-reinsert strategy: simpler and more reliable than calculating diffs
+    // wipe and reinsert is easier than diffing on the client side
     @Query("DELETE FROM watchlist_fund_cross_refs WHERE schemeCode = :schemeCode")
     suspend fun deleteFundMemberships(schemeCode: Int)
 
@@ -150,8 +148,8 @@ abstract class InvestNestDatabase : RoomDatabase() {
     abstract fun watchlistDao(): WatchlistDao
     abstract fun exploreCacheDao(): ExploreCacheDao
 }
-// extension mappers keep entity-to-domain conversion close to the data layer.
-// ViewModels never see Room entities directly — they only work with clean domain models.
+// mappers help us keep room stuff in the data layer
+// the viewmodels only see the clean domain models from the model package
 
 fun WatchlistWithFunds.toSummary(): WatchlistSummary {
     return WatchlistSummary(

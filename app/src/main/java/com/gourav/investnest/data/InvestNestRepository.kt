@@ -33,7 +33,6 @@ class InvestNestRepository @Inject constructor(
     private val exploreCacheDao: ExploreCacheDao,
     private val watchlistDao: com.gourav.investnest.data.local.WatchlistDao,
 ) {
-    // MFAPI sends dates as "dd-MM-yyyy", not ISO 8601, so we need a custom formatter
     private val apiFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy")
 
     // reads from room dao and maps entities to ui summaries. flow means any db change instantly pushes to the ui
@@ -67,15 +66,12 @@ class InvestNestRepository @Inject constructor(
             .sortedBy { it.category.ordinal }
     }
 
-    // search endpoint returns raw scheme names and codes only.
-    // we convert these into placeholder FundSummary objects with isMetadataLoading=true
-    // so the UI can render cards immediately while detail calls fill in NAV data.
     suspend fun searchFundSeeds(
         query: String,
         limit: Int,
     ): List<FundSummary> {
         return apiService.searchFunds(query)
-            .distinctBy { it.schemeCode } // MFAPI can return duplicate scheme codes
+            .distinctBy { it.schemeCode }
             .take(limit)
             .map { it.toPlaceholderSummary() }
     }
@@ -165,14 +161,12 @@ class InvestNestRepository @Inject constructor(
         }
     }
 
-    // evenly-spaced stepping to cap chart data at ~120 points.
-    // this keeps Canvas rendering fast without choking the UI thread on older devices.
-    // trade-off: fixed-interval stepping can smooth away single-day market spikes.
-    // future improvement: LTTB (Largest Triangle Three Buckets) would preserve visual peaks.
     fun filterNavPoints(
         navPoints: List<NavPoint>,
         maxPoints: Int = 120,
     ): List<NavPoint> {
+        // taking all dates and stepping through them to get approx 120 points. keeps the canvas fast without choking the ui thread.
+        // Keep chart rendering light by capping the dataset before it reaches UI.
         if (navPoints.size <= maxPoints) {
             return navPoints
         }
@@ -184,7 +178,6 @@ class InvestNestRepository @Inject constructor(
                 pointer += step
             }
         }
-        // always include the latest point so the chart ends at the current NAV
         return if (sampled.lastOrNull() == navPoints.last()) sampled else sampled + navPoints.last()
     }
 
@@ -223,8 +216,6 @@ class InvestNestRepository @Inject constructor(
 
     private fun FundResponseDto.toFundDetail(): FundDetail {
         val latestEntry = data.firstOrNull()
-        // MFAPI returns history newest-first; we reverse to oldest-first for chronological charting.
-        // runCatching on each entry skips malformed dates instead of crashing the whole parse.
         val sortedPoints = data.mapNotNull { entry ->
             runCatching {
                 NavPoint(
@@ -242,7 +233,6 @@ class InvestNestRepository @Inject constructor(
             latestNavDate = latestEntry?.date.orEmpty(),
             schemeCategory = meta.schemeCategory,
             schemeType = meta.schemeType,
-            // sample immediately so consumers never receive unbounded datasets
             navHistory = filterNavPoints(sortedPoints),
         )
     }

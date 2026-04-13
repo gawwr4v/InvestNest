@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.supervisorScope
 
 data class CategoryUiState(
@@ -53,6 +55,7 @@ data class CategoryUiState(
     val funds: List<FundSummary> = emptyList(),
     val visibleCount: Int = 0,
     val isLoading: Boolean = true,
+    val isMoreLoading: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -73,10 +76,9 @@ class CategoryViewModel @Inject constructor(
     fun loadCategory() {
         viewModelScope.launch {
             _uiState.value = CategoryUiState(title = category.title, isLoading = true)
-            // one heavy fetch up front. MFAPI has no pagination, so we grab everything at once
-            // and reveal items locally via visibleCount.
             val seeds = runCatching {
-                repository.searchFundSeeds(category.query, 28)
+                // Limit the initial fetch size to optimize network performance and manage memory overhead during subsequent detail enrichment.
+                repository.searchFundSeeds(category.query, 60)
             }.getOrElse {
                 _uiState.update { state ->
                     state.copy(
@@ -116,12 +118,19 @@ class CategoryViewModel @Inject constructor(
     }
 
     fun loadMore() {
-        // local reveal strategy: we already have all items from the one fetch above.
-        // bumping visibleCount by 10 simulates infinite scroll without real pagination.
-        _uiState.update { state ->
-            if (state.visibleCount >= state.funds.size) state else state.copy(
-                visibleCount = minOf(state.visibleCount + 10, state.funds.size),
-            )
+        // NOTE: Due to the 15-result limit of the free MFAPI, the 'loadMore' logic 
+        // will only trigger once for most queries before hitting the end of the results.
+        if (_uiState.value.isMoreLoading || _uiState.value.visibleCount >= _uiState.value.funds.size) return
+        
+        viewModelScope.launch {
+            _uiState.update { it.copy(isMoreLoading = true) }
+            delay(400) // simulated delay so the user can actually see the "Loading more..." state
+            _uiState.update { state ->
+                state.copy(
+                    isMoreLoading = false,
+                    visibleCount = minOf(state.visibleCount + 10, state.funds.size),
+                )
+            }
         }
     }
 }
@@ -154,13 +163,14 @@ fun CategoryScreen(
     val listState = rememberLazyListState()
     val visibleFunds = uiState.funds.take(uiState.visibleCount)
 
-    // snapshotFlow watches the LazyListState. when we scroll within 2 items of the
-    // visible end, we trigger loadMore to reveal the next batch of items.
+    // snapshotFlow watches our scroll position... when we get near the end
+    // of the currently visible list we trigger loadMore to show the next 10
     LaunchedEffect(visibleFunds.size, uiState.funds.size, listState) {
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         }.collect { lastVisibleIndex: Int ->
-            if (visibleFunds.isNotEmpty() && lastVisibleIndex >= visibleFunds.lastIndex - 2) {
+            // threshold of 3 ensures it doesn't auto-trigger on tall screens but still loads smoothly
+            if (lastVisibleIndex >= visibleFunds.lastIndex - 3 && visibleFunds.size < uiState.funds.size) {
                 onLoadMore()
             }
         }
@@ -229,17 +239,27 @@ fun CategoryScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        itemsIndexed(visibleFunds, key = { _, fund -> fund.schemeCode }) { index, fund ->
+                        itemsIndexed(visibleFunds, key = { _, fund -> fund.schemeCode }) { _, fund ->
                             FundListItem(
                                 fund = fund,
                                 onClick = { onFundClick(fund.schemeCode) },
                             )
-                            if (index == visibleFunds.lastIndex && visibleFunds.size < uiState.funds.size) {
-                                Text(
-                                    text = "Loading more...",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                        }
+
+                        if (uiState.isMoreLoading) {
+                            item {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = "Loading more...",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }

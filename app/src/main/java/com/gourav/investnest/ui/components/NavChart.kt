@@ -18,7 +18,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.gourav.investnest.model.NavPoint
 
-// native canvas is way faster than pulling in a massive chart library just to draw a single line path
+// native canvas is way faster than pulling in a massive chart library for one graph, keeping it lean
 @Composable
 fun NavChart(
     points: List<NavPoint>,
@@ -54,6 +54,7 @@ fun NavChart(
             )
             .padding(16.dp),
     ) {
+        // draw some simple grid lines so the chart doesn't look like it's floating in space
         val rowCount = 4
         repeat(rowCount) { index ->
             val y = size.height / rowCount * index
@@ -72,6 +73,8 @@ fun NavChart(
             } else {
                 size.width * index / (points.size - 1).toFloat()
             }
+            // we normalize the nav value to a 0.0 - 1.0 range based on the min/max
+            // then map it to the actual pixel height of the canvas
             val normalized = (point.nav - minValue) / range
             val y = size.height - (normalized * size.height)
             if (index == 0) {

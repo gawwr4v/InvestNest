@@ -49,6 +49,8 @@ fun InvestNestSearchField(
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .then(
+                // we have a separate onDisabledClick because the explore screen uses 
+                // a dummy search field that just navigates to the real search screen
                 if (!enabled && onDisabledClick != null) {
                     Modifier.clickable(onClick = onDisabledClick)
                 } else {
@@ -137,6 +139,7 @@ fun FundCard(
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                // progressive enrichment: we show "Fetching NAV" while the background task is running
                 Text(
                     text = if (fund.isMetadataLoading) "Fetching NAV" else "NAV",
                     style = MaterialTheme.typography.bodyMedium,
@@ -189,6 +192,7 @@ fun FundListItem(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // dynamic supporting text, we show category/nav if we have it, else fetching hints
                 val supportingText = when {
                     fund.schemeCategory.isNotBlank() && fund.latestNav.isNotBlank() ->
                         "${fund.schemeCategory}, NAV ₹${fund.latestNav}"
@@ -262,6 +266,7 @@ private fun InitialBadge(
     label: String,
     modifier: Modifier = Modifier,
 ) {
+    // simple logic to grab the first letter of the first two words for the circular badge
     val initials = label.split(" ")
         .filter { it.isNotBlank() }
         .take(2)
@@ -293,6 +298,7 @@ private fun EmptyIllustration(
         modifier = modifier.size(150.dp),
         contentAlignment = Alignment.Center,
     ) {
+        // low-level canvas drawing for a cute empty state illustration, looks better than an image
         Canvas(modifier = Modifier.fillMaxSize()) {
             val outline = Stroke(width = 5.dp.toPx())
             drawRoundRect(

@@ -58,6 +58,8 @@ fun InvestNestApp() {
         BottomDestination.Explore,
         BottomDestination.Watchlists,
     )
+    // we only show the bottom bar if the user is on a top-level screen
+    // detail screens should hide it to give more space for content
     val showBottomBar = bottomDestinations.any { destination ->
         currentDestination?.hierarchy?.any { it.route == destination.route } == true
     }
@@ -75,6 +77,8 @@ fun InvestNestApp() {
                         NavigationBarItem(
                             selected = selected,
                             onClick = {
+                                // standard navigation setup, singleTop prevents duplicate screens
+                                // and restoreState keeps our scroll position when we switch back
                                 navController.navigate(destination.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
                                         saveState = true
@@ -106,6 +110,7 @@ fun InvestNestApp() {
             }
         },
     ) { innerPadding ->
+        // central navigation hub, all our screens are wired up here
         NavHost(
             navController = navController,
             startDestination = BottomDestination.Explore.route,

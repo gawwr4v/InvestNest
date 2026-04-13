@@ -35,15 +35,15 @@ class FundDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: InvestNestRepository,
 ) : ViewModel() {
+    // file split up because it was getting way too huge for one screen, much cleaner now
     private val schemeCode = checkNotNull(savedStateHandle.get<String>("schemeCode")).toInt()
     private val _uiState = MutableStateFlow(FundDetailUiState())
     val uiState = _uiState.asStateFlow()
-    // tracks the real DB membership state separately from the sheet's in-flight edits
+    // currentMembershipIds tracks what is actually in room, separate from the sheet's transient state
     private var currentMembershipIds: Set<Long> = emptySet()
 
     init {
-        // two reactive observers run in parallel alongside the one-shot detail load.
-        // this keeps the bookmark icon and bottom sheet in sync with Room changes.
+        // parallel reactive observers, these keep the bookmark and sheet in sync with the database
         observeWatchlists()
         observeMembership()
         loadDetail()
@@ -84,8 +84,8 @@ class FundDetailViewModel @Inject constructor(
     }
 
     fun openWatchlistSheet() {
-        // snapshot the current DB membership into the sheet's selection state.
-        // this way, the sheet opens with the correct checkboxes pre-filled.
+        // snapshot what's in room right now into the sheet's selection state
+        // this is how we pre-fill the checkboxes when u open the sheet
         _uiState.update { state ->
             state.copy(
                 isSheetVisible = true,
@@ -159,9 +159,8 @@ class FundDetailViewModel @Inject constructor(
 
     private fun observeMembership() {
         viewModelScope.launch {
-            // reactive flow from Room: whenever cross-refs change, this re-emits.
-            // we only update the sheet's selection if the sheet is closed,
-            // to avoid overwriting the user's in-flight checkbox changes.
+            // we observe the junction table reactively, whenever it changes room re-emits
+            // sheet state only updated if it's closed to avoid overwriting user edits
             repository.observeWatchlistIdsForFund(schemeCode).collect { watchlistIds ->
                 currentMembershipIds = watchlistIds
                 _uiState.update { state ->
@@ -180,14 +179,12 @@ class FundDetailViewModel @Inject constructor(
 
     private fun FundDetail.pointsFor(range: NavRange): List<NavPoint> {
         val latestDate = navHistory.lastOrNull()?.date ?: return emptyList()
-        // repository already sampled to ~120 points; we just filter by date range here.
-        // this keeps range switching cheap since we're filtering an already-small list.
+        // history is already sampled to ~120 points so filtering by range is super cheap
         val filtered = when (range) {
             NavRange.SIX_MONTHS -> navHistory.filter { it.date >= latestDate.minusMonths(6) }
             NavRange.ONE_YEAR -> navHistory.filter { it.date >= latestDate.minusYears(1) }
             NavRange.ALL -> navHistory
         }
-        // Reuse sampled data so chart range changes stay cheap on slower devices.
         return repository.filterNavPoints(filtered)
     }
 }
