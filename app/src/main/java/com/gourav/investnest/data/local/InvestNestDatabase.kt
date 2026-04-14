@@ -27,7 +27,7 @@ data class WatchlistEntity(
     val createdAtEpochMillis: Long,
 )
 
-// storage for basic metadata... enough for a card. 
+// storage for basic metadata... enough for a card.
 // chart data is way too big to keep for every fund u save.
 @Entity(tableName = "saved_funds")
 data class SavedFundEntity(
@@ -90,6 +90,7 @@ data class WatchlistWithFunds(
     val funds: List<SavedFundEntity>,
 )
 
+// dao for managing watchlists and their relationships with funds
 @Dao
 interface WatchlistDao {
     @Transaction
@@ -122,6 +123,7 @@ interface WatchlistDao {
     suspend fun insertCrossRefs(entities: List<WatchlistFundCrossRef>)
 }
 
+// dao for managing the explore screen cache
 @Dao
 interface ExploreCacheDao {
     @Query("SELECT * FROM explore_cache ORDER BY categoryKey ASC, position ASC")
@@ -134,6 +136,7 @@ interface ExploreCacheDao {
     suspend fun insertAll(entities: List<ExploreCacheEntity>)
 }
 
+// the main database class that ties all entities and daos together
 @Database(
     entities = [
         WatchlistEntity::class,
@@ -148,6 +151,7 @@ abstract class InvestNestDatabase : RoomDatabase() {
     abstract fun watchlistDao(): WatchlistDao
     abstract fun exploreCacheDao(): ExploreCacheDao
 }
+
 // mappers help us keep room stuff in the data layer
 // the viewmodels only see the clean domain models from the model package
 

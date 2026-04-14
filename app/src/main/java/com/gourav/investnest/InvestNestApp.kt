@@ -29,6 +29,7 @@ import com.gourav.investnest.feature.watchlist.WatchlistScreenRoute
 import com.gourav.investnest.feature.watchlistdetail.WatchlistDetailRoute
 import com.gourav.investnest.ui.theme.InvestNestTheme
 
+// defines the main destinations for the bottom navigation bar
 private sealed class BottomDestination(
     val route: String,
     val label: String,
@@ -44,6 +45,7 @@ private sealed class BottomDestination(
     )
 }
 
+// navigation route constants for easy maintenance across the app
 private const val SearchRoute = "search"
 private const val ViewAllRoute = "view_all/{categoryKey}"
 private const val DetailRoute = "fund/{schemeCode}"
@@ -51,15 +53,18 @@ private const val WatchlistDetailRoute = "watchlist/{watchlistId}"
 
 @Composable
 fun InvestNestApp() {
+    // initializes the navcontroller to manage app navigation state
     val navController = rememberNavController()
+    // tracks the current screen to update the ui accordingly
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = currentBackStackEntry?.destination
     val bottomDestinations = listOf(
         BottomDestination.Explore,
         BottomDestination.Watchlists,
     )
-    // we only show the bottom bar if the user is on a top-level screen
-    // detail screens should hide it to give more space for content
+    
+    // logic to decide when to show the bottom bar based on the current screen
+    // we hide it on detail screens to give more room for data
     val showBottomBar = bottomDestinations.any { destination ->
         currentDestination?.hierarchy?.any { it.route == destination.route } == true
     }
@@ -73,6 +78,7 @@ fun InvestNestApp() {
                     tonalElevation = 0.dp,
                 ) {
                     bottomDestinations.forEach { destination ->
+                        // checks if the current tab is selected
                         val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
                         NavigationBarItem(
                             selected = selected,
@@ -110,12 +116,13 @@ fun InvestNestApp() {
             }
         },
     ) { innerPadding ->
-        // central navigation hub, all our screens are wired up here
+        // the navhost acts as a container that swaps different screens based on the current route
         NavHost(
             navController = navController,
             startDestination = BottomDestination.Explore.route,
             modifier = Modifier.padding(innerPadding),
         ) {
+            // configuration for the explore screen and its navigation actions
             composable(BottomDestination.Explore.route) {
                 ExploreScreenRoute(
                     onSearchClick = { navController.navigate(SearchRoute) },
@@ -127,6 +134,7 @@ fun InvestNestApp() {
                     },
                 )
             }
+            // code for the main watchlist list screen
             composable(BottomDestination.Watchlists.route) {
                 WatchlistScreenRoute(
                     onWatchlistClick = { watchlistId ->
@@ -143,6 +151,7 @@ fun InvestNestApp() {
                     },
                 )
             }
+            // the search funds screen
             composable(SearchRoute) {
                 SearchScreenRoute(
                     onBackClick = { navController.popBackStack() },
@@ -151,6 +160,7 @@ fun InvestNestApp() {
                     },
                 )
             }
+            // configuration for the category list screen that shows more funds
             composable(ViewAllRoute) {
                 CategoryScreenRoute(
                     onBackClick = { navController.popBackStack() },
@@ -159,11 +169,13 @@ fun InvestNestApp() {
                     },
                 )
             }
+            // configuration for the detailed fund view with charts and info
             composable(DetailRoute) {
                 FundDetailRoute(
                     onBackClick = { navController.popBackStack() },
                 )
             }
+            // configuration for a specific watchlist showing its saved funds
             composable(WatchlistDetailRoute) {
                 WatchlistDetailRoute(
                     onBackClick = { navController.popBackStack() },

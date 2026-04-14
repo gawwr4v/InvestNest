@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.gourav.investnest.model.FundSummary
 import com.gourav.investnest.ui.theme.InvestNestTheme
 
+// custom search input component that supports both active typing and simple click navigation
 @Composable
 fun InvestNestSearchField(
     value: String,
@@ -76,6 +77,7 @@ fun InvestNestSearchField(
     }
 }
 
+// standard row for section titles featuring a clickable action label on the right
 @Composable
 fun SectionHeader(
     title: String,
@@ -102,6 +104,7 @@ fun SectionHeader(
     }
 }
 
+// vertical card component used in grids to display primary fund info and latest nav values
 @Composable
 fun FundCard(
     fund: FundSummary,
@@ -155,6 +158,7 @@ fun FundCard(
     }
 }
 
+// horizontal list item used for showing fund summaries with a leading badge and category details
 @Composable
 fun FundListItem(
     fund: FundSummary,
@@ -213,6 +217,7 @@ fun FundListItem(
     }
 }
 
+// placeholder ui displayed when a list is empty to guide users with an action button
 @Composable
 fun EmptyPortfolioState(
     title: String,
@@ -261,6 +266,7 @@ fun EmptyPortfolioState(
     }
 }
 
+// circular badge that generates initials from the fund name for better visual recognition
 @Composable
 private fun InitialBadge(
     label: String,
@@ -288,6 +294,7 @@ private fun InitialBadge(
     }
 }
 
+// custom drawing logic using canvas to render a lightweight placeholder graphic without using images
 @Composable
 private fun EmptyIllustration(
     modifier: Modifier = Modifier,

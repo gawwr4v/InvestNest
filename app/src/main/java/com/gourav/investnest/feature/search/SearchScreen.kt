@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 
+// this data class holds everything the screen needs to show
 data class SearchUiState(
     val query: String = "",
     val results: List<FundSummary> = emptyList(),
@@ -59,29 +60,37 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     private val repository: InvestNestRepository,
 ) : ViewModel() {
+    // we use queryFlow to manage search input and apply logic like debounce
     private val queryFlow = MutableStateFlow("")
+    
+    // _uiState is private so only the ViewModel can update it...
     private val _uiState = MutableStateFlow(SearchUiState())
+    // uiState is public and read only for the UI...
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            // search pipeline: whitespace trimming, 300ms debounce to prevent excessive API requests,
-            // and collectLatest to cancel stale searches when the query changes.
+            // this is the search pipeline... it trims whitespace, waits 300ms for the user to stop typing,
+            // and cancels old searches if the user types something new...
             queryFlow
                 .map { it.trim() }
                 .debounce(300)
                 .distinctUntilChanged()
-                .collectLatest { query ->
+                .collectLatest { query -> //  will automatically cancel the old network job and start the new one immediately if the user types edits the search
                     if (query.isBlank()) {
                         _uiState.value = SearchUiState(query = "")
                         return@collectLatest
                     }
+                    
+                    // showing the loader before the API call starts...
                     _uiState.value = SearchUiState(
                         query = query,
                         isLoading = true,
                     )
+                    
+                    // fetching the initial list of funds from the repository...
                     val seeds = runCatching {
-                        // NOTE: MFAPI.in free tier limits search results to 15 items.
+                        // NOTE: MFAPI free tier limits search results to 15 items.
                         repository.searchFundSeeds(query, 20)
                     }.getOrElse {
                         _uiState.value = SearchUiState(
@@ -90,6 +99,8 @@ class SearchViewModel @Inject constructor(
                         )
                         return@collectLatest
                     }
+                    
+                    // updating the UI with basic info immediately for a fast feel
                     _uiState.update { state ->
                         state.copy(
                             query = query,
@@ -97,20 +108,27 @@ class SearchViewModel @Inject constructor(
                             isLoading = false,
                         )
                     }
+                    
                     val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
-                    // same enrichment as explore, we backfill nav data in parallel
+                    
+                    // fetching detailed price info for every fund in parallel to make the UI rich
                     supervisorScope {
                         seeds.forEach { seed ->
                             launch {
                                 val summary = runCatching {
                                     repository.getFundSummary(seed.schemeCode)
                                 }.getOrNull() ?: return@launch
+                                
+                                // synchronized ensures thread safety while updating our local data
                                 synchronized(currentFunds) {
                                     currentFunds[summary.schemeCode] = summary
                                 }
+                                
                                 val snapshot = synchronized(currentFunds) {
                                     seeds.map { currentFunds[it.schemeCode] ?: it }
                                 }
+                                
+                                // updating the UI state with the new details as they arrive
                                 _uiState.update { state ->
                                     state.copy(results = snapshot)
                                 }
@@ -121,19 +139,24 @@ class SearchViewModel @Inject constructor(
         }
     }
 
+    // called whenever the user types in the search field
     fun onQueryChange(query: String) {
         queryFlow.value = query
+        // update the query immediately so the text field stays responsive
         _uiState.update { it.copy(query = query) }
     }
 }
 
+// the main entry point for the search screen... handles navigation and ViewModel setup
 @Composable
 fun SearchScreenRoute(
     onBackClick: () -> Unit,
     onFundClick: (Int) -> Unit,
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
+    // collecting state in a lifecycle aware way to save resources
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
     SearchScreen(
         uiState = uiState,
         onBackClick = onBackClick,
@@ -165,6 +188,7 @@ fun SearchScreen(
             )
         },
     ) { innerPadding ->
+        // lazycolumn only renders items that are visible, which is great for performance
         LazyColumn(
             modifier = Modifier.padding(innerPadding),
             contentPadding = PaddingValues(20.dp),
@@ -177,6 +201,8 @@ fun SearchScreen(
                     placeholder = "Search by fund name",
                 )
             }
+            
+            // choosing what to show based on the current UI state
             when {
                 uiState.isLoading -> {
                     item {
@@ -232,7 +258,7 @@ fun SearchScreen(
                 }
 
                 else -> {
-                    // keys are important here so compose knows exactly which item changed
+                    // keys are important here so compose knows exactly which item changed when the list changes
                     items(uiState.results, key = { it.schemeCode }) { fund ->
                         FundListItem(
                             fund = fund,

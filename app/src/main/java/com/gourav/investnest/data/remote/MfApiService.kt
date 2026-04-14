@@ -13,7 +13,11 @@ data class SearchFundDto(
     @SerializedName("schemeName")
     val schemeName: String,
 )
+// Note:
+// Search : Sends data in camelCase (like schemeCode).
+// Detail : Sends data in snake_case (like scheme_code).
 
+// this dto holds the general information about the mutual fund like category and fund house
 data class FundMetaDto(
     @SerializedName("fund_house")
     val fundHouse: String,
@@ -27,6 +31,7 @@ data class FundMetaDto(
     val schemeName: String,
 )
 
+// represents a single price point for a fund on a specific date
 data class NavEntryDto(
     @SerializedName("date")
     val date: String,
@@ -34,6 +39,7 @@ data class NavEntryDto(
     val nav: String,
 )
 
+// the main wrapper object returned by the api containing both meta info and price history
 data class FundResponseDto(
     @SerializedName("meta")
     val meta: FundMetaDto,
@@ -43,8 +49,9 @@ data class FundResponseDto(
     val status: String,
 )
 
-// retrofit interface for hitting the mfapi endpoints
+// this is the retrofit service that defines all our network calls to the external api
 interface MfApiService {
+    // searches for funds matching a partial or full name query
     @GET("mf/search")
     suspend fun searchFunds(
         @Query("q") query: String,
@@ -56,7 +63,7 @@ interface MfApiService {
         @Path("schemeCode") schemeCode: Int,
     ): FundResponseDto
 
-    // this returns the full historical nav data for the chart
+    // pulls the complete historical nav data which we use to draw the performance charts
     @GET("mf/{schemeCode}")
     suspend fun getFundHistory(
         @Path("schemeCode") schemeCode: Int,

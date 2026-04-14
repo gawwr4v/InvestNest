@@ -50,6 +50,7 @@ import com.gourav.investnest.ui.components.NavChart
 import com.gourav.investnest.ui.theme.InvestNestTheme
 import java.time.LocalDate
 
+// entry point for the fund details screen that connects the ui to the viewmodel
 @Composable
 fun FundDetailRoute(
     onBackClick: () -> Unit,
@@ -69,18 +70,25 @@ fun FundDetailRoute(
     )
 }
 
+
+// Main screen for showing fund details.
+// This is a Stateless composable, meaning it doesn't hold its own state.
+// It uses "State Hoisting" where:
+// 1. State flows DOWN via [uiState].
+// 2. Events flow UP via lambda callbacks (e.g., [onBackClick], [onRetry]).
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FundDetailScreen(
     uiState: FundDetailUiState,
-    onBackClick: () -> Unit,
-    onRetry: () -> Unit,
-    onRangeSelected: (NavRange) -> Unit,
-    onWatchlistClick: () -> Unit,
-    onDismissSheet: () -> Unit,
-    onToggleWatchlist: (Long) -> Unit,
-    onNewWatchlistNameChange: (String) -> Unit,
-    onSaveWatchlistSelection: () -> Unit,
+    onBackClick: () -> Unit, // navigate back to the previous screen
+    onRetry: () -> Unit, // retry fetching fund details on error
+    onRangeSelected: (NavRange) -> Unit, // user changed the chart time range (e.g. 1M, 1Y)
+    onWatchlistClick: () -> Unit, // open the "Add to watchlist" bottom sheet
+    onDismissSheet: () -> Unit, // close the bottom sheet
+    onToggleWatchlist: (Long) -> Unit, // check/uncheck a specific watchlist by ID
+    onNewWatchlistNameChange: (String) -> Unit, // update text as user types a new watchlist name
+    onSaveWatchlistSelection: () -> Unit, // commit all watchlist changes to storage
 ) {
     val detail = uiState.detail
     Scaffold(
@@ -96,6 +104,7 @@ fun FundDetailScreen(
                     }
                 },
                 actions = {
+                    // bookmark icon changes based on whether the fund is saved in any watchlist
                     IconButton(
                         onClick = onWatchlistClick,
                         enabled = detail != null,
@@ -120,10 +129,12 @@ fun FundDetailScreen(
             contentAlignment = Alignment.Center,
         ) {
             when {
+                // shows a loading spinner while fetching fund details from the api
                 uiState.isLoading -> {
                     CircularProgressIndicator()
                 }
 
+                // displays an error message with a retry button if the fetch fails
                 uiState.errorMessage != null -> {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -147,6 +158,7 @@ fun FundDetailScreen(
                     }
                 }
 
+                // renders the main content once the fund details are successfully loaded
                 detail != null -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -154,6 +166,7 @@ fun FundDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(20.dp),
                     ) {
                         item {
+                            // header section with fund name, category, and latest price
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(
                                     text = detail.schemeName,
@@ -173,6 +186,7 @@ fun FundDetailScreen(
                             }
                         }
                         item {
+                            // chart section showing performance over different time ranges
                             Card(
                                 shape = RoundedCornerShape(24.dp),
                                 colors = CardDefaults.cardColors(
@@ -197,6 +211,7 @@ fun FundDetailScreen(
                             }
                         }
                         item {
+                            // a short dynamically generated summary text about the fund
                             Text(
                                 text = buildFundSummaryText(detail),
                                 style = MaterialTheme.typography.bodyLarge,
@@ -204,6 +219,7 @@ fun FundDetailScreen(
                             )
                         }
                         item {
+                            // grid of cards showing additional fund metadata like amc and type
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -231,6 +247,7 @@ fun FundDetailScreen(
         }
     }
 
+    // bottom sheet for managing which watchlists this fund belongs to
     if (uiState.isSheetVisible) {
         ModalBottomSheet(onDismissRequest = onDismissSheet) {
             Column(
@@ -242,6 +259,7 @@ fun FundDetailScreen(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
+                // input field to create a brand new watchlist on the fly
                 OutlinedTextField(
                     value = uiState.newWatchlistName,
                     onValueChange = onNewWatchlistNameChange,
@@ -256,6 +274,7 @@ fun FundDetailScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 } else {
+                    // list of existing watchlists with checkboxes for multiple selection
                     uiState.availableWatchlists.forEach { watchlist ->
                         Row(
                             modifier = Modifier
@@ -289,6 +308,7 @@ fun FundDetailScreen(
                         color = MaterialTheme.colorScheme.error,
                     )
                 }
+                // primary action button to save all watchlist changes at once
                 Button(
                     onClick = onSaveWatchlistSelection,
                     modifier = Modifier.fillMaxWidth(),
@@ -308,6 +328,7 @@ fun FundDetailScreen(
     }
 }
 
+// reusable small card component for displaying fund metadata items
 @Composable
 private fun DetailInfoCard(
     title: String,
@@ -339,6 +360,7 @@ private fun DetailInfoCard(
     }
 }
 
+// helper to generate a natural sounding summary text based on fund details
 private fun buildFundSummaryText(detail: FundDetail): String {
     return "${detail.amcName} manages this ${detail.schemeCategory.lowercase()}. " +
         "Review recent NAV history and save it into one or more watchlists from here."

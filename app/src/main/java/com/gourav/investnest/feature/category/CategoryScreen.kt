@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.supervisorScope
 
+// this data class holds the entire state for the category screen
 data class CategoryUiState(
     val title: String = "",
     val funds: List<FundSummary> = emptyList(),
@@ -64,20 +65,24 @@ class CategoryViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val repository: InvestNestRepository,
 ) : ViewModel() {
+    // we get the category key from navigation to know which type of funds to display
     private val category = ExploreCategory.fromKey(checkNotNull(savedStateHandle["categoryKey"]))
 
+    // internal state that handles updates within the viewmodel
     private val _uiState = MutableStateFlow(CategoryUiState(title = category.title))
+    // external state that the ui observes for changes
     val uiState: StateFlow<CategoryUiState> = _uiState.asStateFlow()
 
     init {
         loadCategory()
     }
 
+    // fetches the funds for the selected category and starts background data enrichment
     fun loadCategory() {
         viewModelScope.launch {
             _uiState.value = CategoryUiState(title = category.title, isLoading = true)
             val seeds = runCatching {
-                // Limit the initial fetch size to optimize network performance and manage memory overhead during subsequent detail enrichment.
+                // we limit the initial fetch size to optimize network performance and manage memory overhead during subsequent detail enrichment.
                 repository.searchFundSeeds(category.query, 60)
             }.getOrElse {
                 _uiState.update { state ->
@@ -88,6 +93,8 @@ class CategoryViewModel @Inject constructor(
                 }
                 return@launch
             }
+            
+            // showing the first few results quickly while details load in background
             _uiState.update { state ->
                 state.copy(
                     funds = seeds,
@@ -98,15 +105,18 @@ class CategoryViewModel @Inject constructor(
             }
 
             val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
+            // fetching extra details like nav prices for all funds in parallel
             supervisorScope {
                 seeds.forEach { seed ->
                     launch {
                         val summary = runCatching {
                             repository.getFundSummary(seed.schemeCode)
                         }.getOrNull() ?: return@launch
+                        
                         synchronized(currentFunds) {
                             currentFunds[summary.schemeCode] = summary
                         }
+                        
                         val snapshot = synchronized(currentFunds) {
                             seeds.map { currentFunds[it.schemeCode] ?: it }
                         }
@@ -117,9 +127,9 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
+    // simple pagination logic to show more funds as the user scrolls down
     fun loadMore() {
-        // NOTE: Due to the 15-result limit of the free MFAPI, the 'loadMore' logic 
-        // will only trigger once for most queries before hitting the end of the results.
+        // NOTE: Due to the 15-result limit of the free MFAPI, the 'loadMore' logic will only trigger once for most queries before hitting the end of the results.
         if (_uiState.value.isMoreLoading || _uiState.value.visibleCount >= _uiState.value.funds.size) return
         
         viewModelScope.launch {
@@ -135,6 +145,7 @@ class CategoryViewModel @Inject constructor(
     }
 }
 
+// this route connects the navigation system to our viewmodel and screen
 @Composable
 fun CategoryScreenRoute(
     onBackClick: () -> Unit,
@@ -169,7 +180,7 @@ fun CategoryScreen(
         snapshotFlow {
             listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
         }.collect { lastVisibleIndex: Int ->
-            // threshold of 3 ensures it doesn't auto-trigger on tall screens but still loads smoothly
+            // if we are near the end of the visible list we call loadMore
             if (lastVisibleIndex >= visibleFunds.lastIndex - 3 && visibleFunds.size < uiState.funds.size) {
                 onLoadMore()
             }
@@ -198,10 +209,12 @@ fun CategoryScreen(
             contentAlignment = Alignment.Center,
         ) {
             when {
+                // showing a centered loading spinner for the initial load
                 uiState.isLoading -> {
                     CircularProgressIndicator()
                 }
 
+                // displaying error message with a retry button if the fetch fails
                 uiState.errorMessage != null -> {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -225,6 +238,7 @@ fun CategoryScreen(
                     }
                 }
 
+                // simple text display when no funds match the selected category
                 visibleFunds.isEmpty() -> {
                     Text(
                         text = "No funds found in this category.",
@@ -233,6 +247,7 @@ fun CategoryScreen(
                 }
 
                 else -> {
+                    // rendering the list of funds efficiently with lazycolumn
                     LazyColumn(
                         state = listState,
                         contentPadding = PaddingValues(20.dp),
@@ -246,6 +261,7 @@ fun CategoryScreen(
                             )
                         }
 
+                        // showing a loading indicator at the bottom when fetching more items
                         if (uiState.isMoreLoading) {
                             item {
                                 Box(

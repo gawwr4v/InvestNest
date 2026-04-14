@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 @Singleton
+// this repository is the single source for all data in the app, it coordinates between the network api and local room database
 class InvestNestRepository @Inject constructor(
     private val apiService: MfApiService,
     private val database: InvestNestDatabase,
@@ -35,22 +36,24 @@ class InvestNestRepository @Inject constructor(
 ) {
     private val apiFormatter = DateTimeFormatter.ofPattern("dd-MM-yyyy")
 
-    // reads from room dao and maps entities to ui summaries. flow means any db change instantly pushes to the ui
+    // streams the list of all watchlists from the database, it automatically updates the ui whenever a change happens in room
     fun observeWatchlists(): Flow<List<WatchlistSummary>> {
         return watchlistDao.observeWatchlistsWithFunds().map { watchlists ->
             watchlists.map { it.toSummary() }
         }
     }
 
+    // fetches details for a specific watchlist including all its funds, it returns a flow for real time updates
     fun observeWatchlistDetail(watchlistId: Long): Flow<WatchlistDetail?> {
         return watchlistDao.observeWatchlistWithFunds(watchlistId).map { it?.toDetail() }
     }
 
+    // finds all watchlists that contain a specific fund, this helps in showing which watchlists a fund is already part of
     fun observeWatchlistIdsForFund(schemeCode: Int): Flow<Set<Long>> {
         return watchlistDao.observeWatchlistIdsForFund(schemeCode).map { it.toSet() }
     }
 
-    // this reads the room cache mapped by category. groupby helps reconstruct the sections for offline explore
+    // reads saved explore data from room and groups them by category, this allows the app to show data even when offline,
     suspend fun getCachedExploreSections(): List<ExploreSection> {
         return exploreCacheDao.getAll()
             .groupBy { it.categoryKey }
@@ -66,6 +69,7 @@ class InvestNestRepository @Inject constructor(
             .sortedBy { it.category.ordinal }
     }
 
+    // calls the remote api to search for funds by name, it returns a list of basic fund info limited by the count provided
     suspend fun searchFundSeeds(
         query: String,
         limit: Int,
@@ -76,6 +80,7 @@ class InvestNestRepository @Inject constructor(
             .map { it.toPlaceholderSummary() }
     }
 
+    // a helper function that searches for funds based on specific category keywords
     suspend fun getExploreSeeds(
         category: ExploreCategory,
         limit: Int = 4,
@@ -86,24 +91,26 @@ class InvestNestRepository @Inject constructor(
         )
     }
 
+    // fetches the latest nav and basic metadata for a single fund from the api
     suspend fun getFundSummary(
         schemeCode: Int,
     ): FundSummary {
         return apiService.getLatestFund(schemeCode).toFundSummary()
     }
 
+    // gets full historical nav data for a fund, it also applies a filter to keep the chart data light
     suspend fun getFundDetail(
         schemeCode: Int,
     ): FundDetail {
         return apiService.getFundHistory(schemeCode).toFundDetail()
     }
 
+    // replaces the local cache for a specific category with fresh data from the network
     suspend fun saveExploreSection(
         category: ExploreCategory,
         funds: List<FundSummary>,
     ) {
         val now = System.currentTimeMillis()
-        // converting remote summary into room entity and replacing old category data wholesale
         val cacheEntries = funds.mapIndexed { index, fund ->
             ExploreCacheEntity(
                 categoryKey = category.key,
@@ -124,15 +131,17 @@ class InvestNestRepository @Inject constructor(
         }
     }
 
+    // handles complex logic of creating new watchlists and updating fund memberships, it uses a database transaction to ensure data integrity
+    // makes sure there is zero risk of the fund being 'orphaned' or lost if the app crashes midway
     suspend fun updateFundWatchlists(
         detail: FundDetail,
         selectedWatchlistIds: Set<Long>,
         newWatchlistName: String,
     ) {
-        // this is critical. we wrap folder creation, upserting the fund, deleting old links, and inserting new links inside a transaction.
-        // if anything fails midway, it rolls back cleanly so we dont get corrupted state.
+        // this is critical. we wrap folder creation, upserting the fund, deleting old links, and inserting new links inside a transaction
+        // if anything fails midway, it rolls back cleanly so we dont get corrupted state
         database.withTransaction {
-            // One transaction keeps folder creation and membership updates aligned.
+            // One transaction keeps folder creation and membership updates aligned
             val finalIds = selectedWatchlistIds.toMutableSet()
             val trimmedName = newWatchlistName.trim()
             if (trimmedName.isNotEmpty()) {
@@ -147,7 +156,7 @@ class InvestNestRepository @Inject constructor(
             }
 
             watchlistDao.upsertSavedFund(detail.toSavedFundEntity())
-            watchlistDao.deleteFundMemberships(detail.schemeCode)
+            watchlistDao.deleteFundMemberships(detail.schemeCode) // delete all existing watchlist memberships for this fund
             val crossRefs = finalIds.map { watchlistId ->
                 WatchlistFundCrossRef(
                     watchlistId = watchlistId,
@@ -156,17 +165,18 @@ class InvestNestRepository @Inject constructor(
                 )
             }
             if (crossRefs.isNotEmpty()) {
-                watchlistDao.insertCrossRefs(crossRefs)
+                watchlistDao.insertCrossRefs(crossRefs) //  insert the new set of relationships from the checkboxes the user just clicked
             }
         }
     }
 
+    // reduces the number of data points for the nav chart, this prevents the ui from lagging when rendering large datasets
     fun filterNavPoints(
         navPoints: List<NavPoint>,
         maxPoints: Int = 120,
     ): List<NavPoint> {
-        // taking all dates and stepping through them to get approx 120 points. keeps the canvas fast without choking the ui thread.
-        // Keep chart rendering light by capping the dataset before it reaches UI.
+        // taking all dates and stepping through them to get approx 120 points. keeps the canvas fast without choking the ui thread
+        // keep chart rendering light by capping the dataset before it reaches UI
         if (navPoints.size <= maxPoints) {
             return navPoints
         }
@@ -181,6 +191,7 @@ class InvestNestRepository @Inject constructor(
         return if (sampled.lastOrNull() == navPoints.last()) sampled else sampled + navPoints.last()
     }
 
+    // private helper to convert a search dto into a placeholder fund summary
     private fun SearchFundDto.toPlaceholderSummary(): FundSummary {
         return FundSummary(
             schemeCode = schemeCode,
@@ -189,6 +200,7 @@ class InvestNestRepository @Inject constructor(
         )
     }
 
+    // private helper to convert a room entity back into a ui fund summary model
     private fun ExploreCacheEntity.toFundSummary(): FundSummary {
         return FundSummary(
             schemeCode = schemeCode,
@@ -201,6 +213,7 @@ class InvestNestRepository @Inject constructor(
         )
     }
 
+    // private helper to convert the remote api response into a ui fund summary model
     private fun FundResponseDto.toFundSummary(): FundSummary {
         val latestEntry = data.firstOrNull()
         return FundSummary(
@@ -214,6 +227,7 @@ class InvestNestRepository @Inject constructor(
         )
     }
 
+    // private helper to convert the remote api response into a full ui fund detail model
     private fun FundResponseDto.toFundDetail(): FundDetail {
         val latestEntry = data.firstOrNull()
         val sortedPoints = data.mapNotNull { entry ->
@@ -237,6 +251,7 @@ class InvestNestRepository @Inject constructor(
         )
     }
 
+    // private helper to convert a fund detail model into a room entity for saving
     private fun FundDetail.toSavedFundEntity(): SavedFundEntity {
         return SavedFundEntity(
             schemeCode = schemeCode,

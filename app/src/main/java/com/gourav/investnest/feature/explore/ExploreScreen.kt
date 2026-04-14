@@ -42,11 +42,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+// this state class represents everything shown on the explore screen
 data class ExploreUiState(
-    val sections: List<ExploreSection> = emptyList(),
-    val isLoading: Boolean = true,
-    val isRefreshing: Boolean = false,
-    val errorMessage: String? = null,
+    val sections: List<ExploreSection> = emptyList(), // the list of categories and their funds
+    val isLoading: Boolean = true, // used for the very first load when the app opens
+    val isRefreshing: Boolean = false, // used when we are updating data in the background
+    val errorMessage: String? = null, // holds the error text if things go south
 )
 
 @HiltViewModel
@@ -62,7 +63,7 @@ class ExploreViewModel @Inject constructor(
 
     fun refresh() {
         viewModelScope.launch {
-            // reading from room first so data is visible instantly without waiting for the network
+            // we read from the local room database first so data is visible instantly without waiting for the network
             val cachedSections = repository.getCachedExploreSections()
             _uiState.value = if (cachedSections.isNotEmpty()) {
                 ExploreUiState(
@@ -75,15 +76,15 @@ class ExploreViewModel @Inject constructor(
             }
 
             var sawFreshData = false
-            // progressive enrichment thingy... first we fetch names/codes (seeds)
+            // we loop through each category to fetch fresh data from the network
             ExploreCategory.entries.forEach { category ->
-                val seeds = runCatching {
+                val seeds = runCatching { // first we get the basic fund info which we call seeds (names/codes)
                     repository.getExploreSeeds(category)
                 }.getOrElse {
                     return@forEach
                 }
                 sawFreshData = true
-                _uiState.update { state ->
+                _uiState.update { state -> // immediately update the UI state with these seeds
                     state.withSection(
                         ExploreSection(
                             category = category,
@@ -97,7 +98,7 @@ class ExploreViewModel @Inject constructor(
                 }
 
                 val currentFunds = seeds.associateBy { it.schemeCode }.toMutableMap()
-                // supervisor scope is the real deal, it prevents one failed network call from killing the whole screen refresh
+                // supervisor scope is important because it prevents one failed network call from stopping the whole process
                 supervisorScope {
                     seeds.forEach { seed ->
                         launch {
@@ -105,12 +106,16 @@ class ExploreViewModel @Inject constructor(
                             val summary = runCatching {
                                 repository.getFundSummary(seed.schemeCode)
                             }.getOrNull() ?: return@launch
+                            
+                            // we use synchronized to safely update our local map across different coroutines
                             synchronized(currentFunds) {
                                 currentFunds[summary.schemeCode] = summary
                             }
                             val snapshot = synchronized(currentFunds) {
                                 seeds.map { currentFunds[it.schemeCode] ?: it }
                             }
+                            
+                            // we update the ui state with the new fund details as they arrive
                             _uiState.update { state ->
                                 state.withSection(
                                     ExploreSection(
@@ -127,7 +132,7 @@ class ExploreViewModel @Inject constructor(
                     }
                 }
 
-                // finalize the section and save it to room so it's there next time we open the app offline
+                // we save the completed section to room so it is available offline next time
                 val finalSection = synchronized(currentFunds) {
                     seeds.map { currentFunds[it.schemeCode] ?: it }
                         .filterNot { it.isMetadataLoading }
@@ -135,6 +140,7 @@ class ExploreViewModel @Inject constructor(
                 repository.saveExploreSection(category, finalSection)
             }
 
+            // final update to turn off the refreshing indicators
             _uiState.update { state ->
                 when {
                     state.sections.isNotEmpty() -> state.copy(isRefreshing = false, isLoading = false)
@@ -149,8 +155,8 @@ class ExploreViewModel @Inject constructor(
         }
     }
 
+    // helper function to update a specific category section without affecting others
     private fun ExploreUiState.withSection(section: ExploreSection): ExploreUiState {
-        // simple helper to swap out one category's list without messing up the others
         val updatedSections = sections
             .filterNot { it.category == section.category }
             .plus(section)
@@ -159,6 +165,7 @@ class ExploreViewModel @Inject constructor(
     }
 }
 
+// this is the main entry point for the explore screen that connects navigation to the viewmodel
 @Composable
 fun ExploreScreenRoute(
     onSearchClick: () -> Unit,
@@ -184,6 +191,7 @@ fun ExploreScreen(
     onViewAllClick: (ExploreCategory) -> Unit,
     onFundClick: (Int) -> Unit,
 ) {
+    // using lazy column as its great for performance as it only renders what is currently visible
     LazyColumn(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -204,6 +212,8 @@ fun ExploreScreen(
                 onDisabledClick = onSearchClick,
             )
         }
+        
+        // showing a big loading spinner if we have no data to show yet
         if (uiState.isLoading && uiState.sections.isEmpty()) {
             item {
                 Box(
@@ -216,6 +226,8 @@ fun ExploreScreen(
                 }
             }
         }
+        
+        // showing the error state if something went wrong and the screen is empty
         if (uiState.errorMessage != null && uiState.sections.isEmpty()) {
             item {
                 ErrorState(
@@ -225,6 +237,8 @@ fun ExploreScreen(
                 )
             }
         }
+        
+        // rendering each category section on the screen
         items(uiState.sections, key = { it.category.key }) { section ->
             ExploreSectionBlock(
                 section = section,
@@ -232,6 +246,8 @@ fun ExploreScreen(
                 onFundClick = onFundClick,
             )
         }
+        
+        // a small indicator to show we are updating the latest prices in the background
         if (uiState.isRefreshing && uiState.sections.isNotEmpty()) {
             item {
                 Text(
@@ -244,6 +260,7 @@ fun ExploreScreen(
     }
 }
 
+// this component handles the layout for a single category of funds
 @Composable
 private fun ExploreSectionBlock(
     section: ExploreSection,
@@ -258,6 +275,7 @@ private fun ExploreSectionBlock(
             actionLabel = "View All",
             onActionClick = onViewAllClick,
         )
+        // we group the funds in pairs of two to create a simple grid layout
         section.funds.chunked(2).forEach { rowItems ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -270,6 +288,7 @@ private fun ExploreSectionBlock(
                         modifier = Modifier.weight(1f),
                     )
                 }
+                // we add a spacer if there is only one item in the row to keep the layout consistent
                 if (rowItems.size == 1) {
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
                 }
@@ -278,6 +297,7 @@ private fun ExploreSectionBlock(
     }
 }
 
+// a reusable error view for when network requests fail
 @Composable
 private fun ErrorState(
     message: String,

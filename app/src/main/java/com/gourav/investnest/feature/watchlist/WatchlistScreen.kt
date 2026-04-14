@@ -30,29 +30,34 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import androidx.lifecycle.viewModelScope
 
+// simple data class to hold the list of portfolios for the ui
 data class WatchlistUiState(
     val watchlists: List<WatchlistSummary> = emptyList(),
 )
 
+// business logic handler for the watchlist screen
 @HiltViewModel
 class WatchlistViewModel @Inject constructor(
     repository: InvestNestRepository,
 ) : ViewModel() {
+    // converts the stream of watchlist data from the repository into a ui state flow
     val uiState: StateFlow<WatchlistUiState> = repository.observeWatchlists()
         .map { WatchlistUiState(watchlists = it) }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.WhileSubscribed(5_000), // keeps flow active for 5 seconds after screen is hidden
             initialValue = WatchlistUiState(),
         )
 }
 
+// navigation entry point that connects the viewmodel to the ui
 @Composable
 fun WatchlistScreenRoute(
-    onWatchlistClick: (Long) -> Unit,
-    onExploreClick: () -> Unit,
+    onWatchlistClick: (Long) -> Unit, // called when a user taps a portfolio card
+    onExploreClick: () -> Unit, // called when user taps explore button from empty state
     viewModel: WatchlistViewModel = hiltViewModel(),
 ) {
+    // safely collects the latest state from the viewmodel
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     WatchlistScreen(
         uiState = uiState,
@@ -61,12 +66,14 @@ fun WatchlistScreenRoute(
     )
 }
 
+// stateless ui component that displays the list of portfolios
 @Composable
 fun WatchlistScreen(
     uiState: WatchlistUiState,
     onWatchlistClick: (Long) -> Unit,
     onExploreClick: () -> Unit,
 ) {
+    // shows a placeholder state if no watchlists have been created
     if (uiState.watchlists.isEmpty()) {
         EmptyPortfolioState(
             title = "No watchlists yet",
@@ -77,6 +84,7 @@ fun WatchlistScreen(
         return
     }
 
+    // efficient scrolling list of portfolio cards
     LazyColumn(
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -88,6 +96,7 @@ fun WatchlistScreen(
                 fontWeight = FontWeight.Bold,
             )
         }
+        // maps each watchlist item to a clickable card
         items(uiState.watchlists, key = { it.id }) { watchlist ->
             Card(
                 onClick = { onWatchlistClick(watchlist.id) },
@@ -116,6 +125,7 @@ fun WatchlistScreen(
     }
 }
 
+// visual preview for development in android studio
 @Preview(showBackground = true)
 @Composable
 private fun WatchlistScreenPreview() {

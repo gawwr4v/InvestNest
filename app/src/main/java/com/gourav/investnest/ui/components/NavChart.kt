@@ -21,9 +21,10 @@ import com.gourav.investnest.model.NavPoint
 // native canvas is way faster than pulling in a massive chart library for one graph, keeping it lean
 @Composable
 fun NavChart(
-    points: List<NavPoint>,
+    points: List<NavPoint>, // list of nav values over time to plot on the graph
     modifier: Modifier = Modifier,
 ) {
+    // shows a placeholder if we dont have enough data points to draw a line
     if (points.size < 2) {
         Card(
             modifier = modifier.fillMaxWidth(),
@@ -37,6 +38,7 @@ fun NavChart(
         return
     }
 
+    // calculates the value range to scale the graph vertically
     val minValue = points.minOf { it.nav }
     val maxValue = points.maxOf { it.nav }
     val range = (maxValue - minValue).takeIf { it > 0f } ?: 1f
@@ -44,6 +46,7 @@ fun NavChart(
     val chartLineColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
 
+    // renders a custom line chart using low level drawing operations
     Canvas(
         modifier = modifier
             .fillMaxWidth()
@@ -66,8 +69,10 @@ fun NavChart(
             )
         }
 
+        // creates a vector path connecting each data point
         val path = Path()
         points.forEachIndexed { index, point ->
+            // calculates the horizontal position based on the index
             val x = if (points.size == 1) {
                 size.width / 2f
             } else {
@@ -83,6 +88,7 @@ fun NavChart(
                 path.lineTo(x, y)
             }
         }
+        // strokes the final path to show the performance line
         drawPath(
             path = path,
             color = chartLineColor,
