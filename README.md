@@ -1,4 +1,4 @@
-# InvestNest
+# InvestNest ![appLogo](app/src/main/res/mipmap-mdpi/ic_launcher.webp)
 
 InvestNest is a Kotlin + Jetpack Compose Android app for exploring mutual funds, reviewing NAV (Net Asset Value) history, and saving funds into custom watchlists.
 
